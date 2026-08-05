@@ -9,8 +9,16 @@
 1. Multiple "operators" might be trying to reply to the same comment at the same time.
 
 # Solutions
-1. Comment retrieval returns data from *our* storage without making external API calls. Ingestion is out of scope, but we assume this is how it's done. 3rd-party API rate limits are one reason why.
-1. Unify the threading models. TODO link section explaining more.
-1. Do not proactively handle cases when the comment we reply to has been edited/deleted/moderated/etc., at least within the scope of the take-home. TODO link section explaining more.
-1. De-dup user intent using an internal idempotency definition without requiring idempotency keys from users. TODO link section explaining more.
-1. Deliver-at-least-once when posting. TODO link section explaining more.
+1. Comment retrieval returns data from *our* storage without making external API calls. Ingestion is out of scope, but we assume it's in place.
+1. Unify the threading models. See [Unify Threading Models](#unify-threading-models) for more details.
+1. De-dup user intent using an internal idempotency definition without requiring idempotency keys from users. See [De-dup User Intent](#de-dup-user-intent) for more details.
+1. Deliver-at-least-once when posting. See [Deliver-at-least-once](#deliver-at-least-once) for more details.
+1. Do not proactively handle cases when the comment we reply to has been edited/deleted/moderated/etc., at least within the scope of the take-home. See [Do Not Proactively Handle Edited/Deleted/Moderated Comments](#do-not-proactively-handle-edited-comments) for more details.
+
+## <a id="unify-threading-models">Unify Threading Models</a>
+
+## <a id="de-dup-user-intent">De-dup User Intent</a>
+
+## <a id="deliver-at-least-once">Deliver-at-least-once</a>
+
+## <a id="edited-comments">Do Not Proactively Handle Edited/Deleted/Moderated Comments</a>
