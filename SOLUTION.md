@@ -20,5 +20,23 @@
 ## <a id="de-dup-user-intent">De-dup User Intent</a>
 
 ## <a id="deliver-at-least-once">Deliver-at-least-once</a>
+It's clear what to do when posting to the external API clearly succeeds or fails:
+
+| Status | Action |
+|--------|--------|
+| Success | Persist success. |
+AI: Split 4xx errors separate rows and provide 1 example for each.
+| 4xx errors | Fix and retry / Re-try with back-off / DLQ. |
+
+What requires judgment is what to do in inconclusive cases like 5xx errors or timeouts.
+
+### Suggested Approach: Just Re-Try
+It must be for a reason that the third party APIs do not have idempotency keys. Duplicate responses are probably just not a big deal.
+
+### Alternative: Read Before Re-Try
+We could probably find a way to check whether our reply has already been posted in one API request before re-posting if external APIs support somewhat sophisticated filtering like `author=me&comment_id=<ID>&text=<TEXT>`. If choosing this approach, we must wait before re-trying because external APIs are eventually consistent (it seems so).
+
+### Alternative: Check Ingested Data Before Re-Try
+We could query our ingested data to see if the reply has already been posted. If choosing this approach, we must wait for the ingestion lag.
 
 ## <a id="edited-comments">Do Not Proactively Handle Edited/Deleted/Moderated Comments</a>
