@@ -1,12 +1,6 @@
 # Scope
 The solution supports FB and IG because that's what Blotato actually supports.
 
-# Out of Scope
-1. Data Ingestion;
-1. Staleness checks;
-1. Concurrent operators (not irrelevant per se, but I'm trying to minimize the scope of the take-home).
-1. Authorization and authentication (not the most interesting aspect compared to the rest, again, just minimizing the scope).
-
 # Somewhat Interesting Edge Cases
 1. The threading models are different for each platform: FB threads nest deeper than one level, unlike IG.
 1. External comment reply APIs (FB and IG) don't support idempotency.
@@ -22,6 +16,12 @@ The solution supports FB and IG because that's what Blotato actually supports.
 1. De-dup user intent using natural idempotency without requiring idempotency keys from users. See [De-dup User Intent](#de-dup-user-intent) for more details.
 1. Deliver-at-least-once when posting. See [Deliver-at-least-once](#deliver-at-least-once) for more details.
 1. Do not proactively handle cases when the comment we reply to has been edited/deleted/moderated/etc., at least within the scope of the take-home. See [Do Not Proactively Handle Edited/Deleted/Moderated Comments](#edited-comments) for more details.
+
+# Out of Scope
+1. Data Ingestion;
+1. Staleness checks;
+1. Concurrent operators (not irrelevant per se, but I'm trying to minimize the scope of the take-home).
+1. Authorization and authentication (not the most interesting aspect compared to the rest, again, just minimizing the scope).
 
 ## <a id="unify-threading-models">Unify Threading Models</a>
 This one is hard, so we must be strategic here. FB's UI nests reply chains more than one level deep; on X, comments are posts; who knows what else is there in the wild.
