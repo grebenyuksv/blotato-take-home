@@ -161,3 +161,18 @@ Possible alternative: Re-read from our storage before posting a reply. If choosi
 Discarded: All sorts of read-before-write against the platform. It's hard, and it doesn't solve the case when they edit the same moment we're posting.
 
 Discarded: All sorts of reconciliation. It's hard, it consumes API quotas, and it might confuse users even more.
+
+# AI Usage
+
+Done by AI:
+1. Research of FB, IG, and Blotato API docs. I only reviewed the findings, AI tends to reference stale docs. It was AI's idea that idempotency keys are too hard for n8n users.
+1. Generating solution ideas (prompts like "suggest ways to unify threading models and rate them").
+1. Review. Several loops "review for consistency and correctness".
+1. TS. Our solution is exhaustively documented, it would be enough to spin up a agent harness and generate the full code.
+
+Done by me:
+1. Initial draft:
+  1. Scope/out of scope;
+  1. Interesting/standard edge cases;
+  1. High-level solutions (natural idempotency, unifying threading model, not handling comment edits etc.);
+1. Judgement what alternatives to choose (the suggested ways to simply re-try inconclusive attempts and not proactively handle comment edits might appear too lean, they are based on my understanding of what the users need).
