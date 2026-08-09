@@ -54,13 +54,15 @@ Omitting `parentCommentId` returns top-level comments only; passing one returns 
 
 Adapters translate the target into the platform call: both FB (`POST /{comment_id}/comments`) and IG (`POST /{ig_comment_id}/replies`) take the platform id of the comment being replied to. Depth is not our concern on the write path — we name a comment, and the adapter owns what that means on its platform. IG attaches the reply to the top-level comment by documented design; FB places it wherever FB places it. Either way the platform decides where the reply lands, we do not model it, and if that behaviour differs between platforms or changes later, nothing about our schema or API moves. That is the whole point of having adapters.
 
+Code: [`src/platform-adapter.ts`](src/platform-adapter.ts), [`src/facebook-adapter.ts`](src/facebook-adapter.ts), [`src/instagram-adapter.ts`](src/instagram-adapter.ts) (shared shapes in [`src/types.ts`](src/types.ts)).
+
 API IDs are ours; adapters map to platform IDs at publish time.
 
 Replying is async: `202 Accepted` with `{ "id", "status": "pending", ... }`. A worker publishes via the outbox (see below).
 
-**Tracking replies.** `GET /outbound-replies/{id}` to poll one, `GET /outbound-replies?postId=<ID>` to list them. Status is one of `pending`, `published`, `failed` or `expired`.
+**Tracking replies.** `GET /outbound-replies/{id}` to poll one, `GET /outbound-replies?postId=<ID>` to list them. Status is one of `pending`, `published`, `failed` or `expired`. Transitions: [`src/reply-status.ts`](src/reply-status.ts).
 
-**Retrying.** `POST /outbound-replies/{id}/retry` puts a terminal reply back to `pending`, clearing `last_error` and resetting the attempt cycle (`retry_count`, `inconclusive_attempts`, `next_attempt_at`, `deadline_at`) and inserting a fresh outbox row, all in one transaction. `409 Conflict` if the reply is not terminal: `pending` has nothing to retry and `published` has nothing to fix.
+**Retrying.** `POST /outbound-replies/{id}/retry` puts a terminal reply back to `pending`, clearing `last_error` and resetting the attempt cycle (`retry_count`, `inconclusive_attempts`, `next_attempt_at`, `deadline_at`) and inserting a fresh outbox row, all in one transaction. `409 Conflict` if the reply is not terminal: `pending` has nothing to retry and `published` has nothing to fix. Code: [`src/retry-outbound-reply.ts`](src/retry-outbound-reply.ts), transitions in [`src/reply-status.ts`](src/reply-status.ts).
 
 Our replies never appear in `GET /comments`. Once published, a reply comes back through ingestion as an ordinary platform comment, so merging the two collections server-side would mean either double-showing it or writing a suppression rule keyed on `platform_reply_id`. A client that wants to show its reply before ingestion catches up already holds the `id` from the `202`, so it renders and polls that one reply on its own; it does not need the two collections to be queryable along the same axis. The benefit is that `/comments` keeps a single, honest meaning and a reply job stays a job.
 
@@ -96,14 +98,14 @@ outbox(id, reply_id, created_at, claimed_at, claimed_by, processed_at)
   --   mid-flight doesn't wedge the reply in pending forever
 ```
 
-Cursor pagination sorts on `(platform_created_at, id)`; the opaque `cursor` encodes that pair rather than a bare comment id, since `platform_created_at` is not unique.
+Cursor pagination sorts on `(platform_created_at, id)`; the opaque `cursor` encodes that pair rather than a bare comment id, since `platform_created_at` is not unique. Code: [`src/cursor.ts`](src/cursor.ts).
 
 ### Discarded Alternative
 Expose FB's full nesting depth in the API and somehow figure out how to paginate it. Discarded first because no use case of ours reads that depth, and only second because we could not write into it anyway.
 
 ## <a id="de-dup-user-intent">De-dup User Intent</a>
 
-**Natural idempotency**: derive `dedupe_key = hash(target_comment_id, normalized_text)` server-side. Unique constraint on `dedupe_key`; a duplicate POST returns the existing reply (same `id`, current `status`) instead of creating a new row. Automation clients can retry on timeout without supplying headers. The target comment determines the post, so `post_id` would add nothing to the hash.
+**Natural idempotency**: derive `dedupe_key = hash(target_comment_id, normalized_text)` server-side. Unique constraint on `dedupe_key`; a duplicate POST returns the existing reply (same `id`, current `status`) instead of creating a new row. Automation clients can retry on timeout without supplying headers. The target comment determines the post, so `post_id` would add nothing to the hash. Code: [`src/natural-idempotency.ts`](src/natural-idempotency.ts); create path in [`src/create-outbound-reply.ts`](src/create-outbound-reply.ts).
 
 Keying on the target rather than on its thread is what keeps two genuinely different intents apart: "Thanks!" aimed at one commenter and "Thanks!" aimed at another are two replies even on IG, where both will surface under the same top-level comment.
 
@@ -116,7 +118,7 @@ Let a duplicate POST revive a terminal row. Tempting, because clients that blind
 
 ## <a id="deliver-at-least-once">Deliver-at-least-once</a>
 
-On `POST`, insert `outbound_replies` (`pending`) + `outbox` row in one transaction; return `202` immediately. A worker leases outbox rows whose `next_attempt_at` has passed, calls the platform adapter, and updates the reply's status. The outbox row is marked `processed_at` only on a terminal outcome, so a reply awaiting another attempt stays claimable, and a lease that goes stale is reclaimed by another worker.
+On `POST`, insert `outbound_replies` (`pending`) + `outbox` row in one transaction; return `202` immediately. A worker leases outbox rows whose `next_attempt_at` has passed, calls the platform adapter, and updates the reply's status. The outbox row is marked `processed_at` only on a terminal outcome, so a reply awaiting another attempt stays claimable, and a lease that goes stale is reclaimed by another worker. Code: [`src/create-outbound-reply.ts`](src/create-outbound-reply.ts), [`src/outbox-worker.ts`](src/outbox-worker.ts), [`src/reply-status.ts`](src/reply-status.ts).
 
 `pending` must never be permanent, or clients poll forever. Two independent things can make it permanent, and both are closed off: a worker dying mid-flight (handled by the lease expiring) and retrying without end (handled by the budget below).
 
@@ -130,6 +132,8 @@ The axis that matters is not transient vs non-transient but whether the outcome 
 | Non-transient | 403 insufficient permissions | Yes | `failed`, no automatic retry |
 | Non-transient | 400 text too long, or replying to a hidden IG comment | Yes | `failed`, no automatic retry |
 | Inconclusive | 5xx, timeout | No — the reply may or may not exist | See below |
+
+Classifier: [`src/platform-outcome.ts`](src/platform-outcome.ts).
 
 Everything above except the last row is mechanical. What requires judgment is the inconclusive row.
 
